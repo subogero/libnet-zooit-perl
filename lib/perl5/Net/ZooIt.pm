@@ -3,6 +3,7 @@ use strict;
 use warnings;
 
 use Sys::Hostname qw(hostname);
+use Carp qw(croak);
 use POSIX qw(strftime);
 use feature ':5.10';
 
@@ -35,7 +36,7 @@ sub logger {
     $prefix .= " $$";
     $prefix .= " $log_levels[$level]";
     print STDERR "$prefix $msg\n";
-    die $msg if $level == 0;
+    croak $msg if $level == 0;
 }
 
 sub zdie { logger ZOOIT_DIE, @_ }
@@ -74,30 +75,42 @@ sub new_lock {
         "$p{path}/lock-" => hostname . " PID $$",
         flags => ZOO_EPHEMERAL|ZOO_SEQUENCE,
         acl => ZOO_OPEN_ACL_UNSAFE,
-    ) or zdie "Could not create $p{path}/lock-: " . zerr2txt($p{zk}->get_error);
+    );
+    unless ($lock) {
+        zerr "Could not create $p{path}/lock-: " . zerr2txt($p{zk}->get_error);
+        return;
+    }
     zinfo "Created lock $lock";
+    # Create the blessed object now, to enable znode auto-delete
+    # if any subsequent operation fails
+    my $res = bless { lock => $lock, zk => $p{zk} };
 
-    my ($basename, $n) = split /-/, $lock;
+    my ($basename, $n) = split /-/, $res->{lock};
     while (1) {
-        zdebug "Get lock list:";
+        _gc($p{zk});
+
         my @locks = $p{zk}->get_children($p{path});
+        my $err = $p{zk}->get_error;
+        if ($err ne ZOK) {
+            zerr "Could not get lock list: " . zerr2txt($err);
+            return;
+        }
+        zdebug "Get lock list: @locks";
         my $n_prev;
         # Look for other lock with highest sequence number lower than mine
         foreach (@locks) {
-            zdebug "  $_";
             my ($basename_i, $n_i) = split /-/;
             next if $n_i >= $n;
             $n_prev = $n_i if !defined $n_prev || $n_i > $n_prev;
         }
         # If none found, the lock is mine
         unless (defined $n_prev) {
-            zinfo "Take lock: $lock";
-            return bless { lock => $lock, zk => $p{zk} };
+            zinfo "Take lock: $res->{lock}";
+            return $res;
         }
         # I can't take lock, abort if non-blocking call
         unless ($p{blocking}) {
             zinfo "Non-blocking call, abort";
-            $p{zk}->delete($lock);
             return;
         }
         # Wait for lock with highest seq number lower than mine to be deleted
@@ -106,12 +119,38 @@ sub new_lock {
     }
 }
 
+# Automatic deletion of znodes when ZooIt objects go out of scope
+# Garbage collection for znodes deleted during ZCONNECTIONLOSS
+my @garbage;
+
 sub DESTROY {
     my $self = shift;
     if ($self->{lock}) {
-        zinfo "Release lock: $self->{lock}";
+        zinfo "DESTROY deleting lock: $self->{lock}";
         $self->{zk}->delete($self->{lock});
+        my $err = zerr2txt($self->{zk}->get_error);
+        if ($err ne 'ZOK') {
+            push @garbage, $self->{lock};
+            zerr "Could not delete $self->{lock}: $err";
+        }
         delete $self->{lock};
+    }
+}
+
+sub _gc {
+    my $zk = shift;
+    while (my $znode = shift @garbage) {
+        zinfo "_gc deleting $znode";
+        $zk->delete($znode);
+        my $err = zerr2txt($zk->get_error);
+        zdebug "  $err";
+        if ($err eq 'ZOK' || $err eq 'ZNONODE') {
+            zinfo "$znode deleted by _gc";
+        } else {
+            zerr "$znode could not be deleted by _gc: $err";
+            unshift @garbage, $znode;
+            last;
+        }
     }
 }
 
