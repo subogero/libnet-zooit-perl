@@ -155,3 +155,147 @@ sub _gc {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+Net::ZooIt - High level recipes for Apache Net::ZooKeeper
+
+=head1 SYNOPSIS
+
+  use Net::ZooKeeper;
+  use Net::ZooIt;
+
+  Net::ZooIt::set_log_level(ZOOIT_DEBUG);
+
+  my $zk = Net::ZooKeeper->new('localhost:7000');
+  while (1) {
+      my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/election');
+      last unless $lock;
+      do_stuff_when_elected();
+  }
+
+=head1 DESCRIPTION
+
+Net::ZooIt provides high level recipes for working with ZooKeeper in Perl,
+like locks or leader election.
+
+=head2 Net::ZooKeeper Handles
+
+Net::ZooIt methods always take a Net::ZooKeeper handle object as a parameter
+and delegate their creation to the user. Rationale: enterprises often have
+customised ways to create those handles, Net::ZooIt aims to be instantly
+usable without such customisation.
+
+=head2 Automatic Cleanup
+
+Net::ZooIt constructors return a Net::ZooIt object, which automatically
+clean up their znodes when they go out of scope at the end of the enclosing
+block. If you want to clean up earlier, call
+
+  $zooit_obj->DESTROY;
+
+Implication: if you call Net::ZooIt constructors in void context, the
+created object goes out of scope immediately, and your znodes are deleted.
+Net::ZooIt logs a ZOOIT_ERR message in this case.
+
+=head2 Error Handling
+
+Net::ZooIt constructors return nothing in case of errors during creation.
+
+Once you hold a lock or other resource, you're not notified of connection
+loss errors. If you need to take special action, check your Net::ZooKeeper
+handle.
+
+If you give up Net::ZooIt resources during connection loss, your znodes
+cannot be cleaned up immediately, they will enter a garbage collection queue
+and Net::ZooIt will clean them up once connection is resumed.
+
+=head2 Access Control
+
+None so far.
+
+=head2 Logging
+
+Net::ZooIt logs to STDERR.
+Log messages are prefixed with Zulu military time, PID and the level of
+the current message: ZOOIT_DIE ZOOIT_ERR ZOOIT_WARN ZOOIT_INFO ZOOIT_DEBUG.
+
+If Net::ZooIt throws an exception, it prints a ZOOIT_DIE level message
+before dying. This allows seeing the original error message even if
+an eval {} block swallows it.
+
+To capture Net::ZooIt log messages to a file instead of STDERR,
+redirect STDERR to a new file handle in the normal Perl manner:
+
+  open(OLDERR, '>&', fileno(STDERR)) or
+    die("unable to dup STDERR: $!");
+  open(STDERR, '>', $log_file) or
+    die("unable to redirect STDERR: $!");
+
+=head1 ATTRIBUTES
+
+None so far.
+
+=head1 METHODS
+
+=over 4
+
+=item new_lock()
+
+  my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/lock');
+  my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/lock', blocking => 0);
+
+Blocks by default until the lock is acquired.
+Returns a lock object on success, which automatically cleans up its
+znodes when the object goes out of scope at the end of the enclosing block.
+
+Returns nothing on errors, or when called with the nonblocking option and
+the acquisition of the lock failed.
+
+Use the same method for leader election.
+
+=back
+
+=head1 FUNCTIONS
+
+=over 4
+
+=item set_log_level()
+
+  Net::ZooIt::set_log_level($level);
+
+=back
+
+=head1 EXPORTS
+
+Net::ZooIt exports its log_level constants by default:
+ZOOIT_DIE ZOOIT_ERR ZOOIT_WARN ZOOIT_INFO ZOOIT_DEBUG.
+
+=head1 SEE ALSO
+
+The Apache ZooKeeper project's home page at
+L<http://zookeeper.apache.org/> provides a wealth of detail
+on how to develop applications using ZooKeeper.
+
+=head1 AUTHOR
+
+SZABO Gergely, E<lt>szg@subogero.comE<gt>
+
+=head1 COPYRIGHT AND LICENSE
+
+This file is licensed to you under the Apache License, Version 2.0.
+You may not use this file except in compliance with the License.
+See a copy of the License in COPYING, distributed along with this file,
+or obtain a copy at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+=cut
