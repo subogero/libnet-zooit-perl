@@ -59,6 +59,10 @@ sub zerr2txt {
     return $code2name{$err};
 }
 
+# Generate and split sequential znode names
+sub gen_seq_name { hostname . ".PID.$$-" }
+sub split_seq_name { shift =~ /^(.+-)(\d+)$/; $1, $2 }
+
 # ZooKeeper recipe Lock
 sub new_lock {
     my $class = shift;
@@ -71,8 +75,9 @@ sub new_lock {
         unless $p{path} =~ m|^/.+|;
     $p{blocking} //= 1;
 
+    my $lockname = gen_seq_name;
     my $lock = $p{zk}->create(
-        "$p{path}/lock-" => hostname . " PID $$",
+        "$p{path}/$lockname" => 1,
         flags => ZOO_EPHEMERAL|ZOO_SEQUENCE,
         acl => ZOO_OPEN_ACL_UNSAFE,
     );
@@ -83,9 +88,9 @@ sub new_lock {
     zinfo "Created lock $lock";
     # Create the blessed object now, to enable znode auto-delete
     # if any subsequent operation fails
-    my $res = bless { lock => $lock, zk => $p{zk} };
+    my $res = bless { lock => $lock, zk => $p{zk} }, $class;
 
-    my ($basename, $n) = split /-/, $res->{lock};
+    my ($basename, $n) = split_seq_name $res->{lock};
     while (1) {
         _gc($p{zk});
 
@@ -96,12 +101,15 @@ sub new_lock {
             return;
         }
         zdebug "Get lock list: @locks";
-        my $n_prev;
+        my ($lock_prev, $n_prev);
         # Look for other lock with highest sequence number lower than mine
         foreach (@locks) {
-            my ($basename_i, $n_i) = split /-/;
+            my ($basename_i, $n_i) = split_seq_name $_;
             next if $n_i >= $n;
-            $n_prev = $n_i if !defined $n_prev || $n_i > $n_prev;
+            if (!defined $n_prev || $n_i > $n_prev) {
+                $n_prev = $n_i;
+                $lock_prev = $_;
+            }
         }
         # If none found, the lock is mine
         unless (defined $n_prev) {
@@ -115,7 +123,7 @@ sub new_lock {
         }
         # Wait for lock with highest seq number lower than mine to be deleted
         my $w = $p{zk}->watch(timeout => 10000);
-        $w->wait if $p{zk}->exists("$p{path}/lock-$n_prev", watch => $w);
+        $w->wait if $p{zk}->exists("$p{path}/$lock_prev", watch => $w);
     }
 }
 
