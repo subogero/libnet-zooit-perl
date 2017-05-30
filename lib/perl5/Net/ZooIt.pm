@@ -5,6 +5,7 @@ use warnings;
 use Sys::Hostname qw(hostname);
 use Carp qw(croak);
 use POSIX qw(strftime);
+use Time::HiRes qw(time);
 use feature ':5.10';
 
 use Net::ZooKeeper qw(:all);
@@ -73,7 +74,6 @@ sub new_lock {
         unless ref $p{zk};
     zdie "Param path must be a valid ZooKeeper znode path"
         unless $p{path} =~ m|^/.+|;
-    $p{blocking} //= 1;
 
     my $lockname = gen_seq_name;
     my $lock = $p{zk}->create(
@@ -86,9 +86,9 @@ sub new_lock {
         return;
     }
     zinfo "Created lock $lock";
-    # Create the blessed object now, to enable znode auto-delete
-    # if any subsequent operation fails
+    # Create the blessed object now, for auto-deletion if next operations fail
     my $res = bless { lock => $lock, zk => $p{zk} }, $class;
+    my $t0 = time;
 
     my ($basename, $n) = split_seq_name $res->{lock};
     while (1) {
@@ -101,8 +101,8 @@ sub new_lock {
             return;
         }
         zdebug "Get lock list: @locks";
-        my ($lock_prev, $n_prev);
         # Look for other lock with highest sequence number lower than mine
+        my ($lock_prev, $n_prev);
         foreach (@locks) {
             my ($basename_i, $n_i) = split_seq_name $_;
             next if $n_i >= $n;
@@ -116,13 +116,19 @@ sub new_lock {
             zinfo "Take lock: $res->{lock}";
             return $res;
         }
-        # I can't take lock, abort if non-blocking call
-        unless ($p{blocking}) {
-            zinfo "Non-blocking call, abort";
-            return;
+        # I can't take lock, abort if timeout reached
+        my $dt;
+        if (defined $p{timeout}) {
+            $dt = $t0 + $p{timeout} - time;
+            if ($dt <= 0) {
+                zinfo "Timeout reached, abort";
+                return;
+            }
         }
         # Wait for lock with highest seq number lower than mine to be deleted
-        my $w = $p{zk}->watch(timeout => 10000);
+        $dt //= 60;
+        $dt *= 1000;
+        my $w = $p{zk}->watch(timeout => $dt);
         $w->wait if $p{zk}->exists("$p{path}/$lock_prev", watch => $w);
     }
 }
@@ -253,14 +259,18 @@ None so far.
 =item new_lock()
 
   my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/lock');
-  my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/lock', blocking => 0);
+  my $lock = Net::ZooIt->new_lock(zk => $zk, path => '/lock', timeout => 1);
 
 Blocks by default until the lock is acquired.
 Returns a lock object on success, which automatically cleans up its
 znodes when the object goes out of scope at the end of the enclosing block.
 
-Returns nothing on errors, or when called with the nonblocking option and
-the acquisition of the lock failed.
+Returns nothing on errors, or when the acquisition of the lock did not
+succeed before the specified timeout. Nonblocking lock can be achieved
+with timeout => 0.
+
+The method is not reentrant, calling it in a recursive function causes
+a deadlock.
 
 Use the same method for leader election.
 
