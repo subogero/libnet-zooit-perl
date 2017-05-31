@@ -82,7 +82,7 @@ sub new_lock {
         acl => ZOO_OPEN_ACL_UNSAFE,
     );
     unless ($lock) {
-        zerr "Could not create $p{path}/lock-: " . zerr2txt($p{zk}->get_error);
+        zerr "Could not create $p{path}/$lockname: " . zerr2txt($p{zk}->get_error);
         return;
     }
     zinfo "Created lock $lock";
@@ -130,6 +130,93 @@ sub new_lock {
         $dt *= 1000;
         my $w = $p{zk}->watch(timeout => $dt);
         $w->wait if $p{zk}->exists("$p{path}/$lock_prev", watch => $w);
+    }
+}
+
+# ZooKeeper recipe Queue
+sub new_queue {
+    my $class = shift;
+    my %p = @_;
+    zdie "Param zk must be a connect Net::ZooKeeper object"
+        unless ref $p{zk};
+    zdie "Param path must be a valid ZooKeeper znode path"
+        unless $p{path} =~ m|^/.+|;
+
+    return bless { queue => $p{path}, zk => $p{zk} }, $class;
+}
+
+sub put_queue {
+    my ($self, $data) = @_;
+    my $itemname = gen_seq_name;
+    my $item = $self->{zk}->create(
+        "$self->{queue}/$itemname" => $data,
+        flags => ZOO_SEQUENCE,
+        acl => ZOO_OPEN_ACL_UNSAFE,
+    );
+    unless ($item) {
+        zerr "Could not create $self->{queue}/$itemname: " . zerr2txt($self->{zk}->get_error);
+        return;
+    }
+    zinfo "Created queue item $item";
+}
+
+sub get_queue {
+    my $self = shift;
+    my %p = @_;
+    my $t0 = time;
+    while (1) {
+        _gc($self->{zk});
+
+        my @items = $self->{zk}->get_children($self->{queue});
+        my $err = $self->{zk}->get_error;
+        if ($err ne ZOK) {
+            zerr "Could not get queue items: " . zerr2txt($err);
+            return;
+        }
+        zdebug "Get queue items: @items";
+        # Look for queue item with lowest seq number
+        my ($item_min, $n_min);
+        foreach (@items) {
+            my ($item_i, $n_i) = split_seq_name $_;
+            if (!defined $n_min || $n_i < $n_min) {
+                $n_min = $n_i;
+                $item_min = $_;
+            }
+        }
+        # If queue empty, wait for get_children, max timeout [s]
+        unless (defined $n_min) {
+            my $dt;
+            if (defined $p{timeout}) {
+                $dt = $t0 + $p{timeout} - time;
+                if ($dt <= 0) {
+                    zinfo "Timeout reached, abort";
+                    return;
+                }
+            }
+            $dt //= 60;
+            $dt *= 1000;
+            my $w = $self->{zk}->watch(timeout => $dt);
+            $w->wait unless $self->{zk}->get_children("$self->{queue}", watch => $w);
+            next;
+        }
+        # Get data, attempt to delete znode with lowest seq number
+        zinfo "Attempt to get/delete $item_min";
+        my $data = $self->{zk}->get("$self->{queue}/$item_min");
+        $err = $self->{zk}->get_error;
+        if ($err ne ZOK) {
+            zerr "Could not get item data: " . zerr2txt($err);
+            return;
+        }
+        if ($self->{zk}->delete("$self->{queue}/$item_min")) {
+            return $data;
+        }
+        $err = $self->{zk}->get_error;
+        if ($err ne ZNONODE) {
+            zerr "Error deleting queue item: " . zerr2txt($err);
+            return;
+        } else {
+            zinfo "Someone else deleted $item_min";
+        }
     }
 }
 
