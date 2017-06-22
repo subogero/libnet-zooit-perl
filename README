@@ -99,6 +99,29 @@ METHODS
 
       Use the same method for leader election.
 
+    new_queue()
+
+        my $queue = Net::ZooIt->new_queue(zk => $zk, path => '/queue');
+
+      Returns a queue object. DISCLAIMER! Please do not abuse ZooKeeper
+      queues. They store items in a flat way under your /queue znode, which
+      does not scale well.
+
+    put_queue()
+
+        my $success = $queue->put_queue($data);
+
+      Create queue item storing data. Returns true on success, nothing on
+      failure.
+
+    get_queue()
+
+        my $data = $queue->get_queue;
+        my $data = $queue->get_queue(timeout => 5);
+
+      Get an item from queue. Returns data in queue item, or nothing on
+      errors or after timeout [s] has elapsed.
+
 FUNCTIONS
 
     set_log_level()

@@ -161,6 +161,7 @@ sub put_queue {
         return;
     }
     zinfo "Created queue item $item";
+    return 1;
 }
 
 sub get_queue {
@@ -363,6 +364,28 @@ The method is not reentrant, calling it in a recursive function causes
 a deadlock.
 
 Use the same method for leader election.
+
+=item new_queue()
+
+  my $queue = Net::ZooIt->new_queue(zk => $zk, path => '/queue');
+
+Returns a queue object. DISCLAIMER! Please do not abuse ZooKeeper queues.
+They store items in a flat way under your /queue znode,
+which does not scale well.
+
+=item put_queue()
+
+  my $success = $queue->put_queue($data);
+
+Create queue item storing data. Returns true on success, nothing on failure.
+
+=item get_queue()
+
+  my $data = $queue->get_queue;
+  my $data = $queue->get_queue(timeout => 5);
+
+Get an item from queue. Returns data in queue item, or nothing on errors
+or after timeout [s] has elapsed.
 
 =back
 
