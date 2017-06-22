@@ -11,11 +11,14 @@ use YAML::XS;
 
 $| = 1;
 
-Net::ZooIt::set_log_level(ZOOIT_DEBUG);
+Net::ZooIt::set_log_level(ZOOIT_INFO);
+
+my $consumers = 3;
+my $items = 100;
 
 # Create 2 child processes to consume queue
 my $parent = $$;
-for (1 .. 2) {
+for (1 .. $consumers) {
     my $pid = fork;
     last unless $pid;
     print STDERR "Child $pid forked\n";
@@ -29,14 +32,20 @@ my $queue = Net::ZooIt->new_queue(path => '/zooitqueue', zk => $zk);
 
 # Parent waiting for workers to complete
 if ($$ == $parent) {
-    $queue->put_queue($_) for 1 .. 10;
+    $queue->put_queue($_) for 1 .. $items;
     print STDERR "Waiting for children...\n";
-    wait; wait;
+    for (1 .. $consumers) {
+        my $pid = wait;
+        ok(! $?, "Child $pid exited $?");
+    }
     done_testing;
     exit;
 }
 
+# Children consuming queue
+my $processed = 0;
 while (my $data = $queue->get_queue(timeout => 5)) {
+    $processed++;
     print "$$ $data\n";
-    sleep rand 3;
 }
+ok($processed > 0 && $processed < $items, "Child $$ processed $processed");

@@ -205,7 +205,7 @@ sub get_queue {
         $err = $self->{zk}->get_error;
         if ($err ne ZOK) {
             zerr "Could not get item data: " . zerr2txt($err);
-            return;
+            next;
         }
         if ($self->{zk}->delete("$self->{queue}/$item_min")) {
             return $data;
