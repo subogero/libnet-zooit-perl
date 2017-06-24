@@ -8,6 +8,8 @@ WriteMakefile(
     PREREQ_PM => {
         Carp => 0,
         Exporter => 0,
+        'File::Temp' => 0,
+        FindBin => 0,
         'Net::ZooKeeper' => 0,
         POSIX => 0,
         'Sys::Hostname' => 0,
