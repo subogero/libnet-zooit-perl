@@ -9,11 +9,13 @@ use Net::ZooIt;
 use Net::ZooKeeper qw(:all);
 use ZooItServer;
 use Test::More;
+use POSIX;
 
 $| = 1;
 Net::ZooIt::set_log_level(ZOOIT_DEBUG);
 
 my $server = ZooItServer->start;
+eval { $server->connect } or no_server();
 
 my $pid = fork;
 my $zk = $server->connect;
@@ -46,4 +48,10 @@ sub incr {
     print STDERR "$$ $num\n";
     print FILE "$$ $num\n";
     close FILE;
+}
+
+sub no_server {
+    ok(1, 'Skipping test, no ZK server available');
+    done_testing;
+    _exit 0;
 }

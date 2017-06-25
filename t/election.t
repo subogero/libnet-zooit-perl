@@ -9,6 +9,7 @@ use POSIX;
 use Net::ZooIt;
 use Net::ZooKeeper qw(:all);
 use ZooItServer;
+
 use Test::More;
 
 $| = 1;
@@ -19,7 +20,7 @@ my $T_MAX = 30;
 my $T_MAX_ERR = 41;
 
 my $server = ZooItServer->start;
-$server->connect;
+eval { $server->connect } or no_server();
 
 # Create 3 child processes running for leadership for random periods of time
 my $parent = $$;
@@ -70,4 +71,10 @@ if ($$ == $parent) {
             last;
         }
     }
+}
+
+sub no_server {
+    ok(1, 'Skipping test, no ZK server available');
+    done_testing;
+    _exit 0;
 }

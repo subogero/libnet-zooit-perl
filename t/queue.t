@@ -10,6 +10,7 @@ use Net::ZooKeeper qw(:all);
 use ZooItServer;
 use Test::More;
 use YAML::XS;
+use POSIX;
 
 $| = 1;
 
@@ -19,7 +20,7 @@ my $consumers = 3;
 my $items = 100;
 
 my $server = ZooItServer->start;
-$server->connect;
+eval { $server->connect } or no_server();
 
 # Create 2 child processes to consume queue
 my $parent = $$;
@@ -53,4 +54,10 @@ if ($$ == $parent) {
     print STDERR "$$ processed $processed items\n";
     die "$$ processed $processed items"
         unless $processed > 0 && $processed < $items;
+}
+
+sub no_server {
+    ok(1, 'Skipping test, no ZK server available');
+    done_testing;
+    _exit 0;
 }

@@ -68,7 +68,10 @@ sub connect {
         my @z = $self->{zk}->get_children('/');
         my $err = $self->{zk}->get_error;
         print STDERR Net::ZooIt::zerr2txt($err), "\n";
-        next unless $err == ZOK;
+        unless ($err == ZOK) {
+            die "$$ Unable to connect to ZK" if $_ >= 20;
+            next;
+        }
         print STDERR "$$ Connected to $self->{url}\n";
         last;
     }
