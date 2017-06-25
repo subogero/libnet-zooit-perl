@@ -4,8 +4,10 @@ use warnings;
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/lib";
 use Net::ZooIt;
 use Net::ZooKeeper qw(:all);
+use ZooItServer;
 use Test::More;
 use YAML::XS;
 
@@ -16,6 +18,9 @@ Net::ZooIt::set_log_level(ZOOIT_INFO);
 my $consumers = 3;
 my $items = 100;
 
+my $server = ZooItServer->start;
+$server->connect;
+
 # Create 2 child processes to consume queue
 my $parent = $$;
 for (1 .. $consumers) {
@@ -24,8 +29,7 @@ for (1 .. $consumers) {
     print STDERR "Child $pid forked\n";
 }
 
-my $url = shift // '127.0.0.1:2181';
-my $zk = Net::ZooKeeper->new($url, session_timeout => 5000);
+my $zk = $server->connect;
 $zk->create('/zooitqueue' => $$, acl => ZOO_OPEN_ACL_UNSAFE);
 
 my $queue = Net::ZooIt->new_queue(path => '/zooitqueue', zk => $zk);
@@ -39,13 +43,12 @@ if ($$ == $parent) {
         ok(! $?, "Child $pid exited $?");
     }
     done_testing;
-    exit;
-}
-
+} else {
 # Children consuming queue
-my $processed = 0;
-while (my $data = $queue->get_queue(timeout => 5)) {
-    $processed++;
-    print "$$ $data\n";
+    my $processed = 0;
+    while (my $data = $queue->get_queue(timeout => 5)) {
+        $processed++;
+        print "$$ $data\n";
+    }
+    ok($processed > 0 && $processed < $items, "Child $$ processed $processed");
 }
-ok($processed > 0 && $processed < $items, "Child $$ processed $processed");

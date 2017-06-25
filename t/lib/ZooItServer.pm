@@ -7,6 +7,7 @@ use FindBin;
 use File::Temp qw(tempdir);
 
 use Net::ZooKeeper qw(:all);
+use Net::ZooIt;
 
 sub _gen_cfg {
     my $ip = '127.0.0.1';
@@ -34,55 +35,57 @@ sub start {
     my $self;
     if (ref $_[0]) {
         $self = shift;
+        return unless $$ == $self->{parent};
     } else {
         $self = bless {}, shift;
+        $self->{parent} = $$;
+        @{$self}{qw(cmd url dir)} = _gen_cfg();
+        print STDERR "$$ Running in $self->{dir}\n";
     }
 
-    my ($cmd, $url, $dir) = _gen_cfg();
-    print STDERR "Running in $dir\n";
-
-    # Start server
     $self->stop if $self->{pid};
     $self->{pid} = fork;
     die $! unless defined $self->{pid};
     unless ($self->{pid}) {
-        print STDERR "Starting ZooKeeper server on $url\n";
-        exec $cmd;
+        print STDERR "$$ Starting ZooKeeper server on $self->{url}\n";
+        exec $self->{cmd};
         die $!;
-
     }
 
-    # Init client
-    $self->{zk} = Net::ZooKeeper->new($url, session_timeout => 5000);
+    return $self;
+}
+
+sub connect {
+    my $self = shift;
+    if (!$self->{zk} || $$ != $self->{parent}) {
+        delete $self->{zk};
+        print STDERR "$$ Connecting to ZK on $self->{url}\n";
+        $self->{zk} = Net::ZooKeeper->new($self->{url}, session_timeout => 5000);
+    }
     for (1 .. 20) {
         sleep 1;
-        print STDERR "Tryimg to connect to $url\n";
+        print STDERR "$$ Tryimg to connect to $self->{url}: ";
         my @z = $self->{zk}->get_children('/');
         my $err = $self->{zk}->get_error;
+        print STDERR Net::ZooIt::zerr2txt($err), "\n";
         next unless $err == ZOK;
-        print STDERR "Connected to $url\n";
+        print STDERR "$$ Connected to $self->{url}\n";
         last;
     }
-
-    $self->{url} = $url;
-    $self->{dir} = $dir;
-    return $self;
+    return $self->{zk};
 }
 
 sub stop {
     my $self = shift;
+    return unless $$ == $self->{parent};
+    print STDERR "$$ Stopping server\n";
     $self->{pid} and kill 'TERM', $self->{pid};
     wait;
     delete $self->{pid};
 }
 
-sub url { shift()->{url} }
-
-sub zk { shift()->{zk} }
-
 sub DESTROY {
     my $self = shift;
-    print STDERR "Stopping server\n";
     $self->stop;
 }
 

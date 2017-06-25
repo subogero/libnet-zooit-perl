@@ -4,20 +4,20 @@ use warnings;
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
+use lib "$FindBin::Bin/lib";
 use Net::ZooIt;
 use Net::ZooKeeper qw(:all);
+use ZooItServer;
 use Test::More;
 
 $| = 1;
 Net::ZooIt::set_log_level(ZOOIT_DEBUG);
 
-my $file = 'incr.txt';
-unlink $file;
-
-my $url = shift // '127.0.0.1:2181';
+my $server = ZooItServer->start;
 
 my $pid = fork;
-my $zk = Net::ZooKeeper->new($url);
+my $zk = $server->connect;
+my $file = "$server->{dir}/incr.txt";
 $zk->create('/zooitlock' => $$, acl => ZOO_OPEN_ACL_UNSAFE);
 
 incr() for 0 .. 9;
