@@ -50,5 +50,7 @@ if ($$ == $parent) {
         $processed++;
         print "$$ $data\n";
     }
-    ok($processed > 0 && $processed < $items, "Child $$ processed $processed");
+    print STDERR "$$ processed $processed items\n";
+    die "$$ processed $processed items"
+        unless $processed > 0 && $processed < $items;
 }
