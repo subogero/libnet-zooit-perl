@@ -317,10 +317,6 @@ If you give up Net::ZooIt resources during connection loss, your znodes
 cannot be cleaned up immediately, they will enter a garbage collection queue
 and Net::ZooIt will clean them up once connection is resumed.
 
-=head2 Access Control
-
-None so far.
-
 =head2 Logging
 
 Net::ZooIt logs to STDERR.
@@ -330,18 +326,6 @@ the current message: ZOOIT_DIE ZOOIT_ERR ZOOIT_WARN ZOOIT_INFO ZOOIT_DEBUG.
 If Net::ZooIt throws an exception, it prints a ZOOIT_DIE level message
 before dying. This allows seeing the original error message even if
 an eval {} block swallows it.
-
-To capture Net::ZooIt log messages to a file instead of STDERR,
-redirect STDERR to a new file handle in the normal Perl manner:
-
-  open(OLDERR, '>&', fileno(STDERR)) or
-    die("unable to dup STDERR: $!");
-  open(STDERR, '>', $log_file) or
-    die("unable to redirect STDERR: $!");
-
-=head1 ATTRIBUTES
-
-None so far.
 
 =head1 METHODS
 

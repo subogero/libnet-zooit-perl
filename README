@@ -53,10 +53,6 @@ DESCRIPTION
     cannot be cleaned up immediately, they will enter a garbage collection
     queue and Net::ZooIt will clean them up once connection is resumed.
 
- Access Control
-
-    None so far.
-
  Logging
 
     Net::ZooIt logs to STDERR. Log messages are prefixed with Zulu military
@@ -66,18 +62,6 @@ DESCRIPTION
     If Net::ZooIt throws an exception, it prints a ZOOIT_DIE level message
     before dying. This allows seeing the original error message even if an
     eval {} block swallows it.
-
-    To capture Net::ZooIt log messages to a file instead of STDERR,
-    redirect STDERR to a new file handle in the normal Perl manner:
-
-      open(OLDERR, '>&', fileno(STDERR)) or
-        die("unable to dup STDERR: $!");
-      open(STDERR, '>', $log_file) or
-        die("unable to redirect STDERR: $!");
-
-ATTRIBUTES
-
-    None so far.
 
 METHODS
 
