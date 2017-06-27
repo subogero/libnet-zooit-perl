@@ -28,5 +28,12 @@ all :: README
 README :: lib/Net/ZooIt.pm Makefile
 	pod2readme $<
 	-rm README.bak
+release ::
+	[ "$(VERSION)" ]
+	perl -i lib/Net/ZooIt.pm -pe 's/^(our .VERSION = ).+/$$1'$(VERSION)';/'
+	$(MAKE)
+	-git commit -am $(VERSION)
+	git tag $(VERSION)
+	$(MAKE) dist
 EOF
 }
