@@ -3,3 +3,8 @@ Net::ZooIt Revision History
 
 0.1  2017-06-27
   - initial version
+
+0.20  2017-06-30
+  - make release, make tag
+  - LICENSE
+  - README in markdown, gen w/o external tool

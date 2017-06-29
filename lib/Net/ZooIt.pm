@@ -3,7 +3,7 @@ package Net::ZooIt;
 use strict;
 use warnings;
 
-our $VERSION = '0.1';
+our $VERSION = '0.20';
 
 use Sys::Hostname qw(hostname);
 use Carp qw(croak);
