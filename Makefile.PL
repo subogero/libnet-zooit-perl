@@ -4,7 +4,9 @@ WriteMakefile(
     NAME => 'Net::ZooIt',
     VERSION_FROM => 'lib/Net/ZooIt.pm',
     ABSTRACT_FROM => 'lib/Net/ZooIt.pm',
+    LICENSE => 'apache_2_0',
     AUTHOR => 'SZABO Gergely <szg@subogero.com>',
+    MIN_PERL_VERSION => '5.10.1',
     PREREQ_PM => {
         Carp => 0,
         Exporter => 0,
@@ -20,6 +22,16 @@ WriteMakefile(
         strict => 0,
         warnings => 0,
     },
+    META_MERGE => {
+        'meta-spec' => { version => 2 },
+        resources => {
+            repository => {
+                web => "https://github.com/subogero/libnet-zooit-perl",
+                url => "https://github.com/subogero/libnet-zooit-perl.git",
+                type => 'git',
+            },
+        },
+    },
 );
 
 
@@ -27,7 +39,7 @@ sub MY::postamble {
     return <<'EOF';
 all :: README
 README :: lib/Net/ZooIt.pm Makefile
-	bin/pod2md $<
+	bin/pod2md -o $@ $<
 release ::
 	[ "$(VERSION)" ]
 	perl -i lib/Net/ZooIt.pm -pe 's/^(our .VERSION = ).+/$$1'$(VERSION)';/'

@@ -398,7 +398,7 @@ on how to develop applications using ZooKeeper.
 
 SZABO Gergely, E<lt>szg@subogero.comE<gt>
 
-=head1 COPYRIGHT AND LICENSE
+=head1 LICENSE
 
 This file is licensed to you under the Apache License, Version 2.0.
 You may not use this file except in compliance with the License.
