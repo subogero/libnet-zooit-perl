@@ -12,6 +12,7 @@ WriteMakefile(
         FindBin => 0,
         'Net::ZooKeeper' => 0,
         POSIX => 0,
+        'Pod::Markdown' => 0,
         'Sys::Hostname' => 0,
         'Time::HiRes' => 0,
         base => 0,
@@ -26,8 +27,7 @@ sub MY::postamble {
     return <<'EOF';
 all :: README
 README :: lib/Net/ZooIt.pm Makefile
-	pod2readme $<
-	-rm README.bak
+	bin/pod2md $<
 release ::
 	[ "$(VERSION)" ]
 	perl -i lib/Net/ZooIt.pm -pe 's/^(our .VERSION = ).+/$$1'$(VERSION)';/'
