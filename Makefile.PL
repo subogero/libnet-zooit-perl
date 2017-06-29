@@ -40,12 +40,12 @@ sub MY::postamble {
 all :: README
 README :: lib/Net/ZooIt.pm Makefile
 	bin/pod2md -o $@ $<
+export VERSION
 release ::
-	[ "$(VERSION)" ]
-	perl -i lib/Net/ZooIt.pm -pe 's/^(our .VERSION = ).+/$$1'$(VERSION)';/'
-	$(MAKE)
-	-git commit -am $(VERSION)
-	git tag $(VERSION)
+	bin/release prepare
+	touch Makefile.PL
+tag ::
+	bin/release finish
 	$(MAKE) dist
 EOF
 }
