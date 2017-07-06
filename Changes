@@ -8,3 +8,7 @@ Net::ZooIt Revision History
   - make release, make tag
   - LICENSE
   - README in markdown, gen w/o external tool
+
+0.21  2017-07-06
+  - Fix bin/release prepare version check regex
+  - Improve logging for waits on watches
