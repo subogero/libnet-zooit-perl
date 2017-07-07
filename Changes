@@ -12,3 +12,6 @@ Net::ZooIt Revision History
 0.21  2017-07-06
   - Fix bin/release prepare version check regex
   - Improve logging for waits on watches
+
+0.22  2017-07-07
+  - Fix MANIFEST
