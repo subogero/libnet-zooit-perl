@@ -252,18 +252,24 @@ sub get_queue {
 # Garbage collection for znodes deleted during ZCONNECTIONLOSS
 my @garbage;
 
+sub _delete {
+    my ($self, $node) = @_;
+    zinfo "Deleting node: $node";
+    $self->{zk}->delete($node);
+    my $err = zerr2txt($self->{zk}->get_error);
+    if ($err ne 'ZOK') {
+        push @garbage, $node;
+        zerr "Could not delete $node: $err";
+    }
+}
+
 sub DESTROY {
     my $self = shift;
-    if ($self->{lock}) {
-        zinfo "DESTROY deleting lock: $self->{lock}";
-        $self->{zk}->delete($self->{lock});
-        my $err = zerr2txt($self->{zk}->get_error);
-        if ($err ne 'ZOK') {
-            push @garbage, $self->{lock};
-            zerr "Could not delete $self->{lock}: $err";
-        }
-        delete $self->{lock};
-    }
+    my @nodes =
+        $self->{lock} ? delete $self->{lock} :
+        $self->{herd} ? @{ delete $self->{cattle} } :
+        ();
+    $self->_delete($_) for @nodes;
 }
 
 sub _gc {
