@@ -282,7 +282,45 @@ sub join_herd {
 
 sub count_herd {
     my $self = shift;
-    $self->{zk}->get_children($self->{herd});
+    my %p = @_;
+    if (defined $p{waitfor}) {
+        zdie "count_herd param 'waitfor' not code"
+            unless ref $p{waitfor} eq 'CODE';
+    } else {
+        zerr "count_herd timeout ignored, no 'waitfor' callback"
+            if defined $p{timeout};
+    }
+
+    my $t0 = time;
+    while (1) {
+        my @cattle = $self->{zk}->get_children($self->{herd});
+        zdebug "Get cattle list: @cattle";
+        return @cattle unless $p{waitfor};
+        if ($p{waitfor}->(@cattle)) {
+            zinfo "waitfor returned true";
+            return @cattle;
+        }
+
+        # 'waitfor' callback returned false, wait for children to change
+        my $dt;
+        if (defined $p{timeout}) {
+            $dt = $t0 + $p{timeout} - time;
+            if ($dt <= 0) {
+                zinfo "Timeout reached, abort";
+                return @cattle;
+            }
+        }
+        # Wait for children of herd Znode to change
+        $dt //= 60;
+        $dt *= 1000;
+        my $w = $self->{zk}->watch(timeout => $dt);
+        if ($self->{zk}->get_children($self->{herd}, watch => $w)) {
+            zinfo "Wait for children in $self->{herd}";
+            $w->wait;
+            my $event = z2txt('ev', $w->{event}) // 'timeout';
+            zinfo "Wait for children in $self->{herd} over: $event";
+        }
+    }
 }
 
 sub leave_herd {
