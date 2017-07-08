@@ -248,6 +248,58 @@ sub get_queue {
     }
 }
 
+# ZooKeeper recipe Herd
+sub new_herd {
+    my $class = shift;
+    my %p = @_;
+    zdie "Param zk must be a connect Net::ZooKeeper object"
+        unless ref $p{zk};
+    zdie "Param path must be a valid ZooKeeper znode path"
+        unless $p{path} =~ m|^/.+|;
+
+    return bless { herd => $p{path}, zk => $p{zk}, cattle => [] }, $class;
+}
+
+sub join_herd {
+    my $self = shift;
+    my %p = @_;
+    my $group = $p{group} // '';
+    zdie "group must not start with _" if $group =~ /^_/;
+    my $name = "${group}_" . gen_seq_name;
+    my $cattle = $self->{zk}->create(
+        "$self->{herd}/$name" => '',
+        flags => ZOO_SEQUENCE|ZOO_EPHEMERAL,
+        acl => ZOO_OPEN_ACL_UNSAFE,
+    );
+    unless ($cattle) {
+        zerr "Could not create $self->{herd}/$name: " . zerr2txt($self->{zk}->get_error);
+        return;
+    }
+    zinfo "Created herd member $cattle";
+    push @{$self->{cattle}}, $cattle;
+    return $cattle;
+}
+
+sub count_herd {
+    my $self = shift;
+    $self->{zk}->get_children($self->{herd});
+}
+
+sub leave_herd {
+    my $self = shift;
+    my %p = @_;
+    my $group = $p{group} // '';
+    my @remain;
+    foreach (@{$self->{cattle}}) {
+        if (m|^$self->{herd}/${group}_|) {
+            $self->_delete($_)
+        } else {
+            push @remain, $_;
+        }
+    }
+    $self->{cattle} = [ @remain ];
+}
+
 # Automatic deletion of znodes when ZooIt objects go out of scope
 # Garbage collection for znodes deleted during ZCONNECTIONLOSS
 my @garbage;
